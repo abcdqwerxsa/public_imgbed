@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Image Uploader</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f4f7f6;
+            color: #333;
+        }
+        .container {
+            text-align: center;
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 500px;
+        }
+        h1 {
+            margin-top: 0;
+            color: #007bff;
+        }
+        #upload-form {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        #file-input {
+            display: none;
+        }
+        .upload-label {
+            border: 2px dashed #007bff;
+            border-radius: 8px;
+            padding: 50px 20px;
+            cursor: pointer;
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+        .upload-label:hover {
+            background-color: #e9f5ff;
+            border-color: #0056b3;
+        }
+        #upload-button {
+            padding: 12px 20px;
+            border: none;
+            background-color: #28a745;
+            color: white;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #upload-button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 20px;
+            font-size: 14px;
+        }
+        #file-name {
+            font-weight: bold;
+            color: #555;
+        }
+        #result {
+            margin-top: 20px;
+            word-wrap: break-word;
+            background: #eef;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: left;
+            display: none;
+        }
+        #result a {
+            color: #0056b3;
+            text-decoration: none;
+        }
+        #copy-button {
+            margin-left: 10px;
+            padding: 2px 6px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🚀 快速图片上传</h1>
+    <form id="upload-form">
+        <label for="file-input" class="upload-label" id="drop-area">
+            <span id="label-text">点击选择文件或拖拽到这里</span>
+            <div id="file-name"></div>
+        </label>
+        <input type="file" id="file-input" accept="image/*">
+        <button type="submit" id="upload-button" disabled>上传</button>
+    </form>
+    <div class="status" id="status"></div>
+    <div id="result">
+        <p><strong>URL:</strong> <a id="result-url" href="#" target="_blank"></a></p>
+        <p><strong>Markdown:</strong> <code id="result-md"></code> <button id="copy-button">复制</button></p>
+    </div>
+</div>
+
+<script>
+    const CLOUD_NAME = "dfiybqks4"; // <-- ❗ 替换成你的 Cloud Name
+    const UPLOAD_PRESET = "imgbed"; // <-- ❗ 替换成你的 Upload Preset
+
+    const uploadForm = document.getElementById('upload-form');
+    const fileInput = document.getElementById('file-input');
+    const uploadButton = document.getElementById('upload-button');
+    const statusDiv = document.getElementById('status');
+    const resultDiv = document.getElementById('result');
+    const resultUrl = document.getElementById('result-url');
+    const resultMd = document.getElementById('result-md');
+    const copyButton = document.getElementById('copy-button');
+    const dropArea = document.getElementById('drop-area');
+    const fileNameDiv = document.getElementById('file-name');
+    const labelText = document.getElementById('label-text');
+
+    let selectedFile = null;
+
+    // 文件选择事件
+    fileInput.addEventListener('change', (event) => {
+        handleFiles(event.target.files);
+    });
+
+    // 拖拽事件处理
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, preventDefaults, false);
+    });
+    
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropArea.addEventListener(eventName, () => dropArea.style.backgroundColor = '#e9f5ff', false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, () => dropArea.style.backgroundColor = 'transparent', false);
+    });
+
+    dropArea.addEventListener('drop', (e) => {
+        handleFiles(e.dataTransfer.files);
+    }, false);
+
+
+    function handleFiles(files) {
+        if (files.length > 0) {
+            selectedFile = files[0];
+            labelText.style.display = 'none';
+            fileNameDiv.textContent = `已选择文件: ${selectedFile.name}`;
+            uploadButton.disabled = false;
+        }
+    }
+    
+    // 表单提交事件
+    uploadForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!selectedFile) return;
+
+        uploadButton.disabled = true;
+        uploadButton.textContent = '上传中...';
+        statusDiv.textContent = '正在上传，请稍候...';
+        resultDiv.style.display = 'none';
+
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        formData.append('upload_preset', UPLOAD_PRESET);
+
+        try {
+            const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error.message || '上传失败！');
+            }
+
+            const data = await response.json();
+            
+            // 显示结果
+            statusDiv.textContent = '✅ 上传成功!';
+            resultUrl.href = data.secure_url;
+            resultUrl.textContent = data.secure_url;
+            
+            const markdownText = `![${data.original_filename}](${data.secure_url})`;
+            resultMd.textContent = markdownText;
+            
+            resultDiv.style.display = 'block';
+
+        } catch (error) {
+            statusDiv.textContent = `❌ 上传失败: ${error.message}`;
+            console.error('Upload error:', error);
+        } finally {
+            uploadButton.disabled = false;
+            uploadButton.textContent = '上传';
+            // 清理已选择文件状态
+            selectedFile = null;
+            labelText.style.display = 'block';
+            fileNameDiv.textContent = '';
+        }
+    });
+
+    // 复制 Markdown 链接
+    copyButton.addEventListener('click', () => {
+        navigator.clipboard.writeText(resultMd.textContent).then(() => {
+            copyButton.textContent = '已复制!';
+            setTimeout(() => { copyButton.textContent = '复制'; }, 2000);
+        }).catch(err => {
+            alert('复制失败:', err);
+        });
+    });
+
+</script>
+
+</body>
+</html>
